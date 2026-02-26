@@ -14,6 +14,8 @@ export interface Booking {
     start_time: string;
     end_time: string;
     created_at: string;
+    name: string;
+    role: UserRole;
 }
 
 export interface BookingFormData {
