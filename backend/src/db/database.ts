@@ -124,10 +124,10 @@ export const userQueries = {
         return result.rows;
     },
 
-    getById: async (id: string): Promise<User | undefined> => {
+    getById: async (id: string | string[]): Promise<User | undefined> => {
         const result = await pool.query(
-            'SELECT id, name, role, created_at FROM users WHERE id = $1',
-            [id]
+            'SELECT id, name, role, created_at FROM users WHERE id = ANY($1::text[])',
+            [Array.isArray(id) ? id : [id]]
         );
         return result.rows[0];
     },
@@ -149,16 +149,16 @@ export const userQueries = {
         return result.rows[0];
     },
 
-    updateRole: async (id: string, role: UserRole): Promise<User> => {
+    updateRole: async (id: string | string[], role: UserRole): Promise<User> => {
         const result = await pool.query(`
-            UPDATE users SET role = $1 WHERE id = $2 
+            UPDATE users SET role = $1 WHERE id = ANY($2::text[])
             RETURNING id, name, role, created_at
-        `, [role, id]);
+        `, [role, Array.isArray(id) ? id : [id]]);
         return result.rows[0];
     },
 
-    delete: async (id: string): Promise<number> => {
-        const result = await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    delete: async (id: string | string[]): Promise<number> => {
+        const result = await pool.query('DELETE FROM users WHERE id = ANY($1::text[])', [Array.isArray(id) ? id : [id]]);
         return result.rowCount || 0;
     },
 

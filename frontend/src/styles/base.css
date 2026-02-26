@@ -1,0 +1,19 @@
+body {
+    font-family: var(--font-family);
+    background-color: var(--color-gray-100);
+    color: var(--color-gray-800);
+}
+
+#root {
+    min-height: 100vh;
+}
+
+::selection {
+    background-color: var(--color-primary-200);
+    color: var(--color-primary-900);
+}
+
+:focus-visible {
+    outline: 2px solid var(--color-primary-500);
+    outline-offset: 2px;
+}
