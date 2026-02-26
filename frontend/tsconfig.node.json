@@ -7,7 +7,7 @@
     "types": ["node"],
     "skipLibCheck": true,
     "composite": true,
-    "moduleResolution": "Node",
+    "moduleResolution": "bundler",
     "emitDeclarationOnly": true,
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
