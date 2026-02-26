@@ -1,10 +1,9 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { bookingQueries } from '../db/database.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { validateBookingTimes, validateRequiredFields } from '../utils/validation.js';
 import {
-  AuthenticatedRequest,
   CreateBookingRequestBody,
   BookingsResponse,
   BookingResponse,
@@ -13,46 +12,33 @@ import {
   SummaryResponse,
   UserStats,
   ApiError,
-  BookingWithUser,
 } from '../types/index.js';
 
 const router = Router();
 
-/**
- * GET /api/v1/bookings
- * List all bookings (All authenticated users)
- */
-router.get(
-  '/',
-  authenticate,
-  (_req: AuthenticatedRequest, res: Response): void => {
-    try {
-      const bookings = bookingQueries.getAll();
-      const response: BookingsResponse = { bookings };
-      res.json(response);
-    } catch (error) {
-      const apiError: ApiError = {
-        error: 'Database error',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      };
-      res.status(500).json(apiError);
-    }
+router.get('/', authenticate, async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const bookings = await bookingQueries.getAll();
+    const response: BookingsResponse = { bookings };
+    res.json(response);
+  } catch (error) {
+    console.error('Get bookings error:', error);
+    const apiError: ApiError = {
+      error: 'Database error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    };
+    res.status(500).json(apiError);
   }
-);
+});
 
-/**
- * GET /api/v1/bookings/by-user
- * Get bookings grouped by user (Owner and Admin only)
- */
 router.get(
   '/by-user',
   authenticate,
   authorize('owner', 'admin'),
-  (_req: AuthenticatedRequest, res: Response): void => {
+  async (_req: Request, res: Response): Promise<void> => {
     try {
-      const bookings = bookingQueries.getGroupedByUser();
+      const bookings = await bookingQueries.getGroupedByUser();
 
-      // Group bookings by user
       const groupedMap = new Map<string, BookingsByUserGroup>();
 
       for (const booking of bookings) {
@@ -84,6 +70,7 @@ router.get(
       };
       res.json(response);
     } catch (error) {
+      console.error('Get bookings by user error:', error);
       const apiError: ApiError = {
         error: 'Database error',
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -93,17 +80,13 @@ router.get(
   }
 );
 
-/**
- * GET /api/v1/bookings/summary
- * Get usage summary (Owner and Admin only)
- */
 router.get(
   '/summary',
   authenticate,
   authorize('owner', 'admin'),
-  (_req: AuthenticatedRequest, res: Response): void => {
+  async (_req: Request, res: Response): Promise<void> => {
     try {
-      const summary = bookingQueries.countByUser();
+      const summary = await bookingQueries.countByUser();
 
       const formattedSummary: UserStats[] = summary.map((row) => ({
         user: {
@@ -114,21 +97,20 @@ router.get(
         stats: {
           totalBookings: row.booking_count,
           totalMinutes: Math.round(row.total_minutes || 0),
-          totalHours: Math.round((row.total_minutes || 0) / 60 * 100) / 100,
+          totalHours: Math.round(((row.total_minutes || 0) / 60) * 100) / 100,
         },
       }));
 
       const totals = {
         totalUsers: summary.length,
         totalBookings: summary.reduce((sum, row) => sum + row.booking_count, 0),
-        totalMinutes: Math.round(
-          summary.reduce((sum, row) => sum + (row.total_minutes || 0), 0)
-        ),
+        totalMinutes: Math.round(summary.reduce((sum, row) => sum + (row.total_minutes || 0), 0)),
       };
 
       const response: SummaryResponse = { summary: formattedSummary, totals };
       res.json(response);
     } catch (error) {
+      console.error('Get summary error:', error);
       const apiError: ApiError = {
         error: 'Database error',
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -138,17 +120,19 @@ router.get(
   }
 );
 
-/**
- * POST /api/v1/bookings
- * Create a new booking (All authenticated users)
- */
-router.post(
-  '/',
-  authenticate,
-  (req: AuthenticatedRequest, res: Response): void => {
+router.post('/', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      const error: ApiError = {
+        error: 'Authentication required',
+        message: 'User not found in request',
+      };
+      res.status(401).json(error);
+      return;
+    }
+
     const { title, startTime, endTime } = req.body as CreateBookingRequestBody;
 
-    // Validate required fields
     const fieldValidation = validateRequiredFields(
       { title, startTime, endTime },
       ['title', 'startTime', 'endTime']
@@ -162,7 +146,6 @@ router.post(
       return;
     }
 
-    // Validate booking times
     const timeValidation = validateBookingTimes(startTime, endTime);
     if (!timeValidation.valid) {
       const error: ApiError = {
@@ -173,8 +156,7 @@ router.post(
       return;
     }
 
-    // Check for overlapping bookings
-    const overlappingBookings = bookingQueries.checkOverlap(endTime, startTime, 'new');
+    const overlappingBookings = await bookingQueries.checkOverlap(endTime, startTime, 'new');
 
     if (overlappingBookings.length > 0) {
       const error: ApiError = {
@@ -191,43 +173,45 @@ router.post(
       return;
     }
 
-    try {
-      const id = uuidv4();
-      console.log(`Creating booking with ID: ${id} for user: ${req.user!.id}`);
-      bookingQueries.create(id, req.user!.id, title.trim(), startTime, endTime);
+    const id = uuidv4();
+    const userId = req.user.id;
 
-      const newBooking = bookingQueries.getById(id);
-      if (!newBooking) {
-        throw new Error('Failed to create booking');
-      }
+    await bookingQueries.create(id, userId, title.trim(), startTime, endTime);
 
-      const response: BookingResponse = {
-        message: 'Booking created successfully',
-        booking: newBooking,
-      };
-      res.status(201).json(response);
-    } catch (error) {
-      const apiError: ApiError = {
-        error: 'Database error',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      };
-      res.status(500).json(apiError);
+    const newBooking = await bookingQueries.getById(id);
+    if (!newBooking) {
+      throw new Error('Failed to create booking');
     }
-  }
-);
 
-/**
- * DELETE /api/v1/bookings/:id
- * Delete a booking
- */
-router.delete(
-  '/:id',
-  authenticate,
-  (req: AuthenticatedRequest, res: Response): void => {
+    const response: BookingResponse = {
+      message: 'Booking created successfully',
+      booking: newBooking,
+    };
+    res.status(201).json(response);
+  } catch (error) {
+    console.error('Create booking error:', error);
+    const apiError: ApiError = {
+      error: 'Database error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    };
+    res.status(500).json(apiError);
+  }
+});
+
+router.delete('/:id', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      const error: ApiError = {
+        error: 'Authentication required',
+        message: 'User not found in request',
+      };
+      res.status(401).json(error);
+      return;
+    }
+
     const { id } = req.params;
 
-    // Check if booking exists
-    const booking = bookingQueries.getById(id);
+    const booking = await bookingQueries.getById(id);
     if (!booking) {
       const error: ApiError = {
         error: 'Not found',
@@ -237,9 +221,8 @@ router.delete(
       return;
     }
 
-    // Check permissions
-    const isOwnerOrAdmin = ['owner', 'admin'].includes(req.user!.role);
-    const isOwnBooking = booking.user_id === req.user!.id;
+    const isOwnerOrAdmin = ['owner', 'admin'].includes(req.user.role);
+    const isOwnBooking = booking.user_id === req.user.id;
 
     if (!isOwnerOrAdmin && !isOwnBooking) {
       const error: ApiError = {
@@ -250,17 +233,16 @@ router.delete(
       return;
     }
 
-    try {
-      bookingQueries.delete(id);
-      res.json({ message: 'Booking deleted successfully' });
-    } catch (error) {
-      const apiError: ApiError = {
-        error: 'Database error',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      };
-      res.status(500).json(apiError);
-    }
+    await bookingQueries.delete(id);
+    res.json({ message: 'Booking deleted successfully' });
+  } catch (error) {
+    console.error('Delete booking error:', error);
+    const apiError: ApiError = {
+      error: 'Database error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    };
+    res.status(500).json(apiError);
   }
-);
+});
 
 export default router;

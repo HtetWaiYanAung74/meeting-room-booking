@@ -1,10 +1,9 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { userQueries } from '../db/database.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { validateRequiredFields, validateRole, isValidRole } from '../utils/validation.js';
 import {
-    AuthenticatedRequest,
     CreateUserRequestBody,
     UpdateRoleRequestBody,
     UsersResponse,
@@ -14,20 +13,17 @@ import {
 
 const router = Router();
 
-/**
- * GET /api/v1/users
- * List all users (Admin only)
- */
 router.get(
     '/',
     authenticate,
     authorize('admin'),
-    (_req: AuthenticatedRequest, res: Response): void => {
+    async (_req: Request, res: Response): Promise<void> => {
         try {
-            const users = userQueries.getAll();
+            const users = await userQueries.getAll();
             const response: UsersResponse = { users };
             res.json(response);
         } catch (error) {
+            console.error('Get users error:', error);
             const apiError: ApiError = {
                 error: 'Database error',
                 message: error instanceof Error ? error.message : 'Unknown error',
@@ -37,57 +33,50 @@ router.get(
     }
 );
 
-/**
- * POST /api/v1/users
- * Create a new user (Admin only)
- */
 router.post(
     '/',
     authenticate,
     authorize('admin'),
-    (req: AuthenticatedRequest, res: Response): void => {
-        const { name, role } = req.body as CreateUserRequestBody;
-
-        // Validate required fields
-        const fieldValidation = validateRequiredFields({ name, role }, ['name', 'role']);
-        if (!fieldValidation.valid) {
-            const error: ApiError = {
-                error: 'Validation error',
-                message: fieldValidation.error!,
-            };
-            res.status(400).json(error);
-            return;
-        }
-
-        // Validate role
-        const roleValidation = validateRole(role);
-        if (!roleValidation.valid) {
-            const error: ApiError = {
-                error: 'Validation error',
-                message: roleValidation.error!,
-            };
-            res.status(400).json(error);
-            return;
-        }
-
-        // Check if name already exists
-        const existingUser = userQueries.getByName(name.trim().toLowerCase());
-        if (existingUser) {
-            const error: ApiError = {
-                error: 'Conflict',
-                message: 'Name already exists',
-            };
-            res.status(409).json(error);
-            return;
-        }
-
+    async (req: Request, res: Response): Promise<void> => {
         try {
-            const id = uuidv4();
-            if (isValidRole(role)) {
-                userQueries.create(id, name.trim().toLowerCase(), role);
+            const { name, role } = req.body as CreateUserRequestBody;
+
+            const fieldValidation = validateRequiredFields({ name, role }, ['name', 'role']);
+            if (!fieldValidation.valid) {
+                const error: ApiError = {
+                    error: 'Validation error',
+                    message: fieldValidation.error!,
+                };
+                res.status(400).json(error);
+                return;
             }
 
-            const newUser = userQueries.getById(id);
+            const roleValidation = validateRole(role);
+            if (!roleValidation.valid) {
+                const error: ApiError = {
+                    error: 'Validation error',
+                    message: roleValidation.error!,
+                };
+                res.status(400).json(error);
+                return;
+            }
+
+            const existingUser = await userQueries.getByUsername(name.trim().toLowerCase());
+            if (existingUser) {
+                const error: ApiError = {
+                    error: 'Conflict',
+                    message: 'Username already exists',
+                };
+                res.status(409).json(error);
+                return;
+            }
+
+            const id = uuidv4();
+            if (isValidRole(role)) {
+                await userQueries.create(id, name.trim().toLowerCase(), role);
+            }
+
+            const newUser = await userQueries.getById(id);
             if (!newUser) {
                 throw new Error('Failed to create user');
             }
@@ -98,6 +87,7 @@ router.post(
             };
             res.status(201).json(response);
         } catch (error) {
+            console.error('Create user error:', error);
             const apiError: ApiError = {
                 error: 'Database error',
                 message: error instanceof Error ? error.message : 'Unknown error',
@@ -107,56 +97,58 @@ router.post(
     }
 );
 
-/**
- * PATCH /api/v1/users/:id/role
- * Change user role (Admin only)
- */
 router.patch(
     '/:id/role',
     authenticate,
     authorize('admin'),
-    (req: AuthenticatedRequest, res: Response): void => {
-        const { id } = req.params;
-        const { role } = req.body as UpdateRoleRequestBody;
-
-        // Validate role
-        const roleValidation = validateRole(role);
-        if (!roleValidation.valid) {
-            const error: ApiError = {
-                error: 'Validation error',
-                message: roleValidation.error!,
-            };
-            res.status(400).json(error);
-            return;
-        }
-
-        // Check if user exists
-        const user = userQueries.getById(id);
-        if (!user) {
-            const error: ApiError = {
-                error: 'Not found',
-                message: 'User not found',
-            };
-            res.status(404).json(error);
-            return;
-        }
-
-        // Prevent admin from changing their own role
-        if (id === req.user?.id?.toString()) {
-            const error: ApiError = {
-                error: 'Invalid operation',
-                message: 'Cannot change your own role',
-            };
-            res.status(400).json(error);
-            return;
-        }
-
+    async (req: Request, res: Response): Promise<void> => {
         try {
-            if (isValidRole(role)) {
-                userQueries.updateRole(id, role);
+            if (!req.user) {
+                const error: ApiError = {
+                    error: 'Authentication required',
+                    message: 'User not found in request',
+                };
+                res.status(401).json(error);
+                return;
             }
 
-            const updatedUser = userQueries.getById(id);
+            const { id } = req.params;
+            const { role } = req.body as UpdateRoleRequestBody;
+
+            const roleValidation = validateRole(role);
+            if (!roleValidation.valid) {
+                const error: ApiError = {
+                    error: 'Validation error',
+                    message: roleValidation.error!,
+                };
+                res.status(400).json(error);
+                return;
+            }
+
+            const user = await userQueries.getById(id);
+            if (!user) {
+                const error: ApiError = {
+                    error: 'Not found',
+                    message: 'User not found',
+                };
+                res.status(404).json(error);
+                return;
+            }
+
+            if (id === req.user.id) {
+                const error: ApiError = {
+                    error: 'Invalid operation',
+                    message: 'Cannot change your own role',
+                };
+                res.status(400).json(error);
+                return;
+            }
+
+            if (isValidRole(role)) {
+                await userQueries.updateRole(id, role);
+            }
+
+            const updatedUser = await userQueries.getById(id);
             if (!updatedUser) {
                 throw new Error('Failed to update user');
             }
@@ -167,6 +159,7 @@ router.patch(
             };
             res.json(response);
         } catch (error) {
+            console.error('Update role error:', error);
             const apiError: ApiError = {
                 error: 'Database error',
                 message: error instanceof Error ? error.message : 'Unknown error',
@@ -176,42 +169,45 @@ router.patch(
     }
 );
 
-/**
- * DELETE /api/v1/users/:id
- * Delete a user (Admin only)
- */
 router.delete(
     '/:id',
     authenticate,
     authorize('admin'),
-    (req: AuthenticatedRequest, res: Response): void => {
-        const { id } = req.params;
-
-        // Check if user exists
-        const user = userQueries.getById(id);
-        if (!user) {
-            const error: ApiError = {
-                error: 'Not found',
-                message: 'User not found',
-            };
-            res.status(404).json(error);
-            return;
-        }
-
-        // Prevent admin from deleting themselves
-        if (id === req.user?.id?.toString()) {
-            const error: ApiError = {
-                error: 'Invalid operation',
-                message: 'Cannot delete your own account',
-            };
-            res.status(400).json(error);
-            return;
-        }
-
+    async (req: Request, res: Response): Promise<void> => {
         try {
-            const result = userQueries.delete(id);
+            if (!req.user) {
+                const error: ApiError = {
+                    error: 'Authentication required',
+                    message: 'User not found in request',
+                };
+                res.status(401).json(error);
+                return;
+            }
 
-            if (result.changes === 0) {
+            const { id } = req.params;
+
+            const user = await userQueries.getById(id);
+            if (!user) {
+                const error: ApiError = {
+                    error: 'Not found',
+                    message: 'User not found',
+                };
+                res.status(404).json(error);
+                return;
+            }
+
+            if (id === req.user.id) {
+                const error: ApiError = {
+                    error: 'Invalid operation',
+                    message: 'Cannot delete your own account',
+                };
+                res.status(400).json(error);
+                return;
+            }
+
+            const rowCount = await userQueries.delete(id);
+
+            if (rowCount === 0) {
                 const error: ApiError = {
                     error: 'Not found',
                     message: 'User not found',
@@ -225,6 +221,7 @@ router.delete(
                 note: 'All bookings associated with this user have also been deleted',
             });
         } catch (error) {
+            console.error('Delete user error:', error);
             const apiError: ApiError = {
                 error: 'Database error',
                 message: error instanceof Error ? error.message : 'Unknown error',

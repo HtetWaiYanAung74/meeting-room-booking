@@ -1,60 +1,67 @@
-import { NextFunction, Response } from "express";
-import { ApiError, AuthenticatedRequest, UserRole } from "../types/index.js";
-import { userQueries } from "../db/database.js";
+import { Response, NextFunction, Request } from 'express';
+import { userQueries } from '../db/database.js';
+import { User, UserRole, ApiError } from '../types/index.js';
 
-export function authenticate(
-    req: AuthenticatedRequest,
-    res: Response,
-    next: NextFunction
-): void {
-    const userId = req.headers['x-user-id'] as string | undefined;
-    if (!userId) {
-        const error: ApiError = {
-            error: "Authentication required",
-            message: "Missing x-user-id header",
-        };
-        res.status(401).json(error);
-        return;
+declare global {
+    namespace Express {
+        interface Request {
+            user?: User;
+        }
     }
-
-    const user = userQueries.getById(userId);
-    if (!user) {
-        const error: ApiError = {
-            error: "Authentication failed",
-            message: "User not found",
-        };
-        res.status(401).json(error);
-        return;
-    }
-    req.user = user;
-    next();
 }
 
-/**
- * Authorization middleware
- * @param allowedRoles - Roles allowed to access the route
- */
-export function authorize(...allowedRoles: UserRole[]) {
-    return (
-        req: AuthenticatedRequest, 
-        res: Response, 
-        next: NextFunction
-    ): void => {
-        const user = req.user;
-        if (!user) {
+export async function authenticate(
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<void> {
+    try {
+        const userId = req.headers['x-user-id'];
+
+        if (!userId || typeof userId !== 'string') {
             const error: ApiError = {
-                error: "Authorization required",
-                message: "User not authenticated",
+                error: 'Authentication required',
+                message: 'Missing x-user-id header',
             };
             res.status(401).json(error);
             return;
         }
 
-        if (!allowedRoles.includes(user.role)) {
+        const user = await userQueries.getById(userId);
+
+        if (!user) {
             const error: ApiError = {
-                error: "Access denied",
-                message: "This action requires one of the following roles: " + allowedRoles.join(", "),
-                role: user.role,
+                error: 'Authentication failed',
+                message: 'User not found',
+            };
+            res.status(401).json(error);
+            return;
+        }
+
+        req.user = user;
+        next();
+    } catch (error) {
+        console.error('Authentication error:', error);
+        res.status(500).json({ error: 'Server error', message: 'Authentication failed' });
+    }
+}
+
+export function authorize(...allowedRoles: UserRole[]) {
+    return (req: Request, res: Response, next: NextFunction): void => {
+        if (!req.user) {
+            const error: ApiError = {
+                error: 'Authentication required',
+                message: 'User not authenticated',
+            };
+            res.status(401).json(error);
+            return;
+        }
+
+        if (!allowedRoles.includes(req.user.role)) {
+            const error: ApiError = {
+                error: 'Access denied',
+                message: `This action requires one of the following roles: ${allowedRoles.join(', ')}`,
+                role: req.user.role,
             };
             res.status(403).json(error);
             return;
