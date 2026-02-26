@@ -11,25 +11,40 @@ import type {
 
 const { Pool } = pg;
 
-// Create connection pool
+// Supabase connection configuration
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+    throw new Error('DATABASE_URL environment variable is required');
+}
+
+// Create connection pool with Supabase settings
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    connectionString,
+    ssl: {
+        rejectUnauthorized: false, // Required for Supabase
+    },
+    max: 10, // Maximum number of clients in the pool
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
 });
 
-// Test connection
+// Connection event handlers
 pool.on('connect', () => {
-    console.log('Connected to PostgreSQL database');
+    console.log('✅ Connected to Supabase PostgreSQL');
 });
 
 pool.on('error', (err) => {
-    console.error('PostgreSQL pool error:', err);
+    console.error('❌ Supabase pool error:', err);
 });
 
+// Initialize database tables
 export async function initializeDatabase(): Promise<void> {
     const client = await pool.connect();
 
     try {
+        console.log('🔄 Initializing database tables...');
+
         // Create users table
         await client.query(`
             CREATE TABLE IF NOT EXISTS users (
@@ -40,7 +55,7 @@ export async function initializeDatabase(): Promise<void> {
             )
         `);
 
-        // Create bookings table with CASCADE delete
+        // Create bookings table
         await client.query(`
             CREATE TABLE IF NOT EXISTS bookings (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -54,7 +69,8 @@ export async function initializeDatabase(): Promise<void> {
 
         // Create index for faster overlap queries
         await client.query(`
-            CREATE INDEX IF NOT EXISTS idx_bookings_times ON bookings(start_time, end_time)
+            CREATE INDEX IF NOT EXISTS idx_bookings_times 
+            ON bookings(start_time, end_time)
         `);
 
         // Seed default users if none exist
@@ -62,6 +78,8 @@ export async function initializeDatabase(): Promise<void> {
         const userCount = parseInt(userCountResult.rows[0].count, 10);
 
         if (userCount === 0) {
+            console.log('🌱 Seeding default users...');
+
             const seedUsers: Array<{ name: string; role: UserRole }> = [
                 { name: 'admin', role: 'admin' },
                 { name: 'owner', role: 'owner' },
@@ -74,16 +92,26 @@ export async function initializeDatabase(): Promise<void> {
                     'INSERT INTO users (id, name, role) VALUES ($1, $2, $3)',
                     [uuidv4(), user.name, user.role]
                 );
+                console.log(`  ✅ Created user: ${user.name} (${user.role})`);
             }
-            console.log('Database seeded with default users');
         }
 
-        console.log('Database initialized successfully');
+        console.log('🎉 Database initialization complete!');
     } catch (error) {
-        console.error('Database initialization error:', error);
+        console.error('❌ Database initialization error:', error);
         throw error;
     } finally {
         client.release();
+    }
+}
+
+// Health check function
+export async function checkDatabaseHealth(): Promise<boolean> {
+    try {
+        const result = await pool.query('SELECT NOW()');
+        return !!result.rows[0];
+    } catch {
+        return false;
     }
 }
 
@@ -96,7 +124,7 @@ export const userQueries = {
         return result.rows;
     },
 
-    getById: async (id: string | string[]): Promise<User | undefined> => {
+    getById: async (id: string): Promise<User | undefined> => {
         const result = await pool.query(
             'SELECT id, name, role, created_at FROM users WHERE id = $1',
             [id]
@@ -104,28 +132,39 @@ export const userQueries = {
         return result.rows[0];
     },
 
-    getByUsername: async (name: string): Promise<User | undefined> => {
+    getByName: async (name: string): Promise<User | undefined> => {
         const result = await pool.query(
-            'SELECT id, name, role, created_at FROM users WHERE name = $1',
+            'SELECT id, name, role, created_at FROM users WHERE LOWER(name) = LOWER($1)',
             [name]
         );
         return result.rows[0];
     },
 
-    create: async (id: string | string[], name: string, role: UserRole): Promise<void> => {
-        await pool.query(
-            'INSERT INTO users (id, name, role) VALUES ($1, $2, $3)',
-            [id, name, role]
-        );
+    create: async (id: string, name: string, role: UserRole): Promise<User> => {
+        const result = await pool.query(`
+            INSERT INTO users (id, name, role) 
+            VALUES ($1, $2, $3) 
+            RETURNING id, name, role, created_at
+        `, [id, name.toLowerCase(), role]);
+        return result.rows[0];
     },
 
-    updateRole: async (id: string | string[], role: UserRole): Promise<void> => {
-        await pool.query('UPDATE users SET role = $1 WHERE id = ANY($2::uuid[])', [role, id]);
+    updateRole: async (id: string, role: UserRole): Promise<User> => {
+        const result = await pool.query(`
+            UPDATE users SET role = $1 WHERE id = $2 
+            RETURNING id, name, role, created_at
+        `, [role, id]);
+        return result.rows[0];
     },
 
-    delete: async (id: string | string[]): Promise<number> => {
-        const result = await pool.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [id]);
+    delete: async (id: string): Promise<number> => {
+        const result = await pool.query('DELETE FROM users WHERE id = $1', [id]);
         return result.rowCount || 0;
+    },
+
+    count: async (): Promise<number> => {
+        const result = await pool.query('SELECT COUNT(*) as count FROM users');
+        return parseInt(result.rows[0].count, 10);
     },
 };
 
@@ -133,73 +172,84 @@ export const userQueries = {
 export const bookingQueries = {
     getAll: async (): Promise<BookingWithUser[]> => {
         const result = await pool.query(`
-            SELECT b.id, b.user_id, b.title, b.start_time, b.end_time, b.created_at,
-            u.name, u.role as role
+            SELECT b.*, u.name as name, u.role as role
             FROM bookings b
             JOIN users u ON b.user_id = u.id
-            ORDER BY b.start_time
+            ORDER BY b.start_time ASC
         `);
         return result.rows;
     },
 
     getById: async (id: string | string[]): Promise<BookingWithUser | undefined> => {
         const result = await pool.query(`
-            SELECT b.*, u.name as name, u.role as role
-            FROM bookings b
+            SELECT b.*, u.name as name, u.role as role FROM bookings b
             JOIN users u ON b.user_id = u.id
-            WHERE b.id = ANY($1::uuid[])
-        `, [id]);
+            WHERE b.id = ANY($1::text[])
+        `, [Array.isArray(id) ? id : [id]]);
         return result.rows[0];
     },
 
-    getByUserId: async (userId: string | string[]): Promise<Booking[]> => {
-        const result = await pool.query(
-            `SELECT * FROM bookings WHERE user_id = ANY($1::uuid[]) ORDER BY start_time`,
-            [userId]
-        );
+    getByUserId: async (userId: string): Promise<Booking[]> => {
+        const result = await pool.query(`
+            SELECT * FROM bookings
+            WHERE user_id = $1
+            ORDER BY start_time ASC
+        `, [userId]);
         return result.rows;
     },
 
     checkOverlap: async (
-        endTime: string,
         startTime: string,
-        excludeId: string
+        endTime: string,
+        excludeId?: string
     ): Promise<OverlapCheckRow[]> => {
-        const result = await pool.query(`
+        const query = excludeId ? `
             SELECT id, title, start_time, end_time
             FROM bookings
-            WHERE start_time < $1 AND end_time > $2
-            AND id != $3
-        `, [endTime, startTime, excludeId]);
+            WHERE start_time < $2 AND end_time > $1 AND id != $3
+        ` : `
+            SELECT id, title, start_time, end_time
+            FROM bookings
+            WHERE start_time < $2 AND end_time > $1
+        `;
+
+        const params = excludeId ? [startTime, endTime, excludeId] : [startTime, endTime];
+        const result = await pool.query(query, params);
         return result.rows;
     },
 
     create: async (
-        id: string | string[],
-        userId: string | string[],
+        id: string,
+        userId: string,
         title: string,
         startTime: string,
         endTime: string
     ): Promise<void> => {
-        await pool.query(
-            'INSERT INTO bookings (id, user_id, title, start_time, end_time) VALUES ($1, $2, $3, $4, $5)',
+        await pool.query(`
+            INSERT INTO bookings (id, user_id, title, start_time, end_time) 
+            VALUES ($1, $2, $3, $4, $5)`,
             [id, userId, title, startTime, endTime]
         );
     },
 
     delete: async (id: string | string[]): Promise<number> => {
-        const result = await pool.query('DELETE FROM bookings WHERE id = ANY($1::uuid[])', [id]);
+        const result = await pool.query('DELETE FROM bookings WHERE id = ANY($1::text[])', [Array.isArray(id) ? id : [id]]);
         return result.rowCount || 0;
     },
 
     countByUser: async (): Promise<BookingSummaryRow[]> => {
         const result = await pool.query(`
-            SELECT u.id, u.name, u.role, 
+            SELECT 
+            u.id, 
+            u.name as name, 
+            u.role, 
             COUNT(b.id)::int as booking_count,
-            COALESCE(SUM(EXTRACT(EPOCH FROM (b.end_time - b.start_time)) / 60), 0)::float as total_minutes
+            COALESCE(
+                SUM(EXTRACT(EPOCH FROM (b.end_time - b.start_time)) / 60), 0
+            )::float as total_minutes
             FROM users u
             LEFT JOIN bookings b ON u.id = b.user_id
-            GROUP BY u.id
+            GROUP BY u.id, u.name as name, u.role
             ORDER BY booking_count DESC
         `);
         return result.rows;
@@ -207,14 +257,19 @@ export const bookingQueries = {
 
     getGroupedByUser: async (): Promise<BookingWithUser[]> => {
         const result = await pool.query(`
-            SELECT b.id, b.user_id, b.title, b.start_time, b.end_time, b.created_at,
-            u.name, u.role as role
+            SELECT b.*, u.name as name, u.role as role
             FROM bookings b
             JOIN users u ON b.user_id = u.id
-            ORDER BY u.name, b.start_time
+            ORDER BY u.name ASC, b.start_time ASC
         `);
         return result.rows;
     },
+
+    count: async (): Promise<number> => {
+        const result = await pool.query('SELECT COUNT(*) as count FROM bookings');
+        return parseInt(result.rows[0].count, 10);
+    },
 };
 
+// Export pool for direct queries if needed
 export { pool };
