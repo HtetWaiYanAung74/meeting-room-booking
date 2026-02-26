@@ -12,7 +12,7 @@ A full-stack web application for managing meeting room bookings with role-based 
 
 ## Tech Stack
 
-- **Backend**: Node.js, Express, SQLite (better-sqlite3)
+- **Backend**: Node.js, Express, Postgres (Supabase)
 - **Frontend**: React, Vite, TypeScript
 
 ## Time Handling
