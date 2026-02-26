@@ -1,4 +1,5 @@
-import pg from 'pg';
+import 'dotenv/config';
+import { Pool } from 'pg';
 import { v4 as uuidv4 } from 'uuid';
 import type {
     User,
@@ -9,24 +10,28 @@ import type {
     OverlapCheckRow,
 } from '../types/index.js';
 
-const { Pool } = pg;
+const requiredEnvVars = [
+    'POSTGRES_HOST',
+    'POSTGRES_PORT',
+    'POSTGRES_DATABASE',
+    'POSTGRES_USER',
+    'POSTGRES_PASSWORD'
+];
 
-// Supabase connection configuration
-const connectionString = process.env.DATABASE_URL;
+const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 
-if (!connectionString) {
-    throw new Error('DATABASE_URL environment variable is required');
+if (missingEnvVars.length > 0) {
+    console.error(`missing required environment variables: ${missingEnvVars}`);
+    process.exit(1);
 }
 
 // Create connection pool with Supabase settings
 const pool = new Pool({
-    connectionString,
-    ssl: {
-        rejectUnauthorized: false, // Required for Supabase
-    },
-    max: 10, // Maximum number of clients in the pool
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
+    host: process.env.POSTGRES_HOST,
+    port: Number(process.env.POSTGRES_PORT) || 5432,
+    database: process.env.POSTGRES_DATABASE,
+    user: process.env.POSTGRES_USER,
+    password: process.env.POSTGRES_PASSWORD
 });
 
 // Connection event handlers
@@ -126,8 +131,8 @@ export const userQueries = {
 
     getById: async (id: string | string[]): Promise<User | undefined> => {
         const result = await pool.query(
-            'SELECT id, name, role, created_at FROM users WHERE id = ANY($1::text[])',
-            [Array.isArray(id) ? id : [id]]
+            'SELECT id, name, role, created_at FROM users WHERE id = $1::uuid',
+            [id]
         );
         return result.rows[0];
     },
@@ -151,14 +156,14 @@ export const userQueries = {
 
     updateRole: async (id: string | string[], role: UserRole): Promise<User> => {
         const result = await pool.query(`
-            UPDATE users SET role = $1 WHERE id = ANY($2::text[])
+            UPDATE users SET role = $1 WHERE id = $2::uuid
             RETURNING id, name, role, created_at
-        `, [role, Array.isArray(id) ? id : [id]]);
+        `, [role, id]);
         return result.rows[0];
     },
 
     delete: async (id: string | string[]): Promise<number> => {
-        const result = await pool.query('DELETE FROM users WHERE id = ANY($1::text[])', [Array.isArray(id) ? id : [id]]);
+        const result = await pool.query('DELETE FROM users WHERE id = $1::uuid', [id]);
         return result.rowCount || 0;
     },
 
@@ -184,8 +189,8 @@ export const bookingQueries = {
         const result = await pool.query(`
             SELECT b.*, u.name as name, u.role as role FROM bookings b
             JOIN users u ON b.user_id = u.id
-            WHERE b.id = ANY($1::text[])
-        `, [Array.isArray(id) ? id : [id]]);
+            WHERE b.id = $1::uuid
+        `, [id]);
         return result.rows[0];
     },
 
@@ -233,23 +238,20 @@ export const bookingQueries = {
     },
 
     delete: async (id: string | string[]): Promise<number> => {
-        const result = await pool.query('DELETE FROM bookings WHERE id = ANY($1::text[])', [Array.isArray(id) ? id : [id]]);
+        const result = await pool.query('DELETE FROM bookings WHERE id = $1::uuid', [id]);
         return result.rowCount || 0;
     },
 
     countByUser: async (): Promise<BookingSummaryRow[]> => {
         const result = await pool.query(`
-            SELECT 
-            u.id, 
-            u.name as name, 
-            u.role, 
+            SELECT u.id, u.name as name, u.role, 
             COUNT(b.id)::int as booking_count,
             COALESCE(
                 SUM(EXTRACT(EPOCH FROM (b.end_time - b.start_time)) / 60), 0
             )::float as total_minutes
             FROM users u
             LEFT JOIN bookings b ON u.id = b.user_id
-            GROUP BY u.id, u.name as name, u.role
+            GROUP BY u.id, u.name, u.role
             ORDER BY booking_count DESC
         `);
         return result.rows;
