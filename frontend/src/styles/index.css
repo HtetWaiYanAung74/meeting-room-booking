@@ -369,3 +369,51 @@
 .btn--ghost:disabled {
   opacity: 0.5;
 }
+
+.form-required {
+  color: var(--color-error-500);
+  margin-left: 4px;
+  font-weight: var(--font-weight-bold);
+}
+
+.form-error {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-sm);
+  color: var(--color-error-600);
+  margin-top: 4px;
+  animation: shake 0.3s ease-in-out;
+}
+
+.form-error::before {
+  content: '⚠';
+  font-size: 12px;
+}
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+  75% {
+    transform: translateX(-4px);
+  }
+}
+
+.form-input--success {
+  border-color: var(--color-success-500);
+}
+
+.form-input--success:focus {
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
+}
+
+.form-input::placeholder {
+  color: var(--color-gray-400);
+}

@@ -10,7 +10,6 @@ export function LoginPage() {
         <div className="login-page-wrapper">
             <div className="login-page">
                 <div className="login-brand">
-                    {/* <div className="login-brand__icon">🏢</div> */}
                     <h1 className="login-brand__title">Meeting Room</h1>
                     <p className="login-brand__subtitle">Booking System</p>
                 </div>
