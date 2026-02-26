@@ -38,7 +38,7 @@ When a user is deleted, all their bookings are automatically deleted (CASCADE de
 ## API Endpoints
 
 ### Authentication
-- `POST /api/v1/auth/login` - Login by username
+- `POST /api/v1/auth/login` - Login by name
 - `GET /api/v1/auth/me` - Get current user
 
 ### Users (Admin only)
@@ -78,12 +78,12 @@ Frontend runs on http://localhost:3000
 
 ## Default Users
 
-| Username | Role  |
-|----------|-------|
-| admin    | Admin |
-| owner    | Owner |
-| user1    | User  |
-| user2    | User  |
+| Name  | Role  |
+|-------|-------|
+| admin | Admin |
+| owner | Owner |
+| user1 | User  |
+| user2 | User  |
 
 ## Deployment
 
