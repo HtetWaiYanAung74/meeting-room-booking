@@ -104,7 +104,9 @@ npm run dev
 
 The frontend runs on `https://meeting-room-booking-beryl.vercel.app/` and the backend on `https://meeting-room-booking-ocuy.onrender.com/`.
 
----## Default Users
+---
+
+## Default Users
 
 Seeded on first startup. The default password for all accounts is the value of `SEED_DEFAULT_PASSWORD` (defaults to `password123`).
 
