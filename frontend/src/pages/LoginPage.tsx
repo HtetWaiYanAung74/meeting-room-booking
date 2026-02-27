@@ -16,11 +16,6 @@ export function LoginPage() {
         return () => clearTimeout(timeout);
     }, []);
 
-    const handleResetClick = () => {
-        resetLoading();
-        clearError();
-    };
-
     return (
         <div className="login-page-wrapper">
             <div className="login-page">
@@ -44,17 +39,6 @@ export function LoginPage() {
                             <Message type='error' onDismiss={clearError}>
                                 {error}
                             </Message>
-                        )}
-
-                        {isLoading && (
-                            <div className='login-loading-notice'>
-                                <p className='text-sm text-gray-500 mb-sm'>
-                                    Taking too long? There might be a connection issue.
-                                </p>
-                                <Button variant='ghost' size='sm' onClick={handleResetClick}>
-                                    Reset and try again
-                                </Button>
-                            </div>
                         )}
 
                         <LoginForm onSubmit={login} isLoading={isLoading} />

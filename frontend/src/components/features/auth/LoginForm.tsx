@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Input } from '@/components/common';
 
 interface LoginFormProps {
@@ -9,11 +9,14 @@ interface LoginFormProps {
 export function LoginForm({ onSubmit, isLoading }: LoginFormProps) {
     const [name, setName] = useState('');
     const [error, setError] = useState('');
-    const [touched, setTouched] = useState(false);
+    const [hasSubmitted, setHasSubmitted] = useState(false);
+    const [hasTyped, setHasTyped] = useState(false);
+    const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (isLoading) {
             setError('');
+            setHasSubmitted(false);
         }
     }, [isLoading]);
 
@@ -28,33 +31,39 @@ export function LoginForm({ onSubmit, isLoading }: LoginFormProps) {
     }, []);
 
     const handleBlur = () => {
-        setTouched(true);
-        setError(validateName(name));
+        if (hasTyped && name.trim()) {
+            setError(validateName(name));
+        }
     };
 
     const handleChange = (value: string) => {
         setName(value);
-        if (touched) {
+        setHasTyped(true);
+        if (hasSubmitted) {
             setError(validateName(value));
+        } else if (error && value.trim()) {
+            setError('');
         }
     };
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        setTouched(true);
-
+        setHasSubmitted(true);
         const validationError = validateName(name);
         if (validationError) {
             setError(validationError);
+            inputRef.current?.focus();
             return;
         }
 
         try {
             await onSubmit(name.trim());
-        } catch {
-            setError('Login failed. Please check your name.');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
         }
     };
+
+    const showError = error && (hasSubmitted || (hasTyped && name.length > 0));
 
     return (
         <form onSubmit={handleSubmit} className="login-form" noValidate>
@@ -64,7 +73,7 @@ export function LoginForm({ onSubmit, isLoading }: LoginFormProps) {
                 onBlur={handleBlur}
                 placeholder="Enter your name"
                 disabled={isLoading}
-                error={touched ? error : undefined}
+                error={showError ? error : undefined}
                 required
                 autoFocus
                 autoComplete="name"

@@ -1,3 +1,4 @@
+import { MouseEvent } from 'react';
 import { RoleBadge } from '@/components/common';
 import { DEMO_USERS } from '@/utils/constants';
 
@@ -7,6 +8,14 @@ interface QuickLoginButtonsProps {
 }
 
 export function QuickLoginButtons({ onSelect, isLoading }: QuickLoginButtonsProps) {
+
+    const handleClick = (e: MouseEvent<HTMLButtonElement>, username: string) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (isLoading) return;
+        onSelect(username);
+    };
+
     return (
         <div className="quick-login">
             <div className="quick-login__grid">
@@ -14,7 +23,7 @@ export function QuickLoginButtons({ onSelect, isLoading }: QuickLoginButtonsProp
                     <button
                         key={user.name}
                         className="quick-login__button"
-                        onClick={() => onSelect(user.name)}
+                        onClick={e => handleClick(e, user.name)}
                         disabled={isLoading}
                         type="button"
                     >
