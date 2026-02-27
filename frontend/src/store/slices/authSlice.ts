@@ -35,6 +35,7 @@ const authSlice = createSlice({
         logout: (state) => {
             state.user = null;
             state.error = null;
+            state.isLoading = false;
             api.setUserId(null);
         },
         clearAuthError: (state) => {
@@ -42,10 +43,15 @@ const authSlice = createSlice({
         },
         setAuthUser: (state, action: PayloadAction<User>) => {
             state.user = action.payload;
+            state.isLoading = false;
             api.setUserId(action.payload.id);
         },
+        resetAuthLoading: state => {
+            state.isLoading = false;
+        },
+        resetAuthState: () => initialState,
     },
-    extraReducers: (builder) => {
+    extraReducers: builder => {
         builder
             .addCase(loginUser.pending, (state) => {
                 state.isLoading = true;
@@ -63,5 +69,11 @@ const authSlice = createSlice({
     },
 });
 
-export const { logout, clearAuthError, setAuthUser } = authSlice.actions;
+export const { 
+    clearAuthError, 
+    logout, 
+    resetAuthLoading, 
+    resetAuthState, 
+    setAuthUser, 
+} = authSlice.actions;
 export default authSlice.reducer;

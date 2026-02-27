@@ -1,5 +1,6 @@
 import { configureStore, combineReducers } from '@reduxjs/toolkit';
 import {
+    createTransform,
     persistStore,
     persistReducer,
     FLUSH,
@@ -10,8 +11,21 @@ import {
     REGISTER,
 } from 'redux-persist';
 import storage from 'redux-persist/lib/storage';
-
 import { authReducer, bookingsReducer, usersReducer, notificationReducer } from './slices';
+
+const resetLoadingTransform = createTransform(
+    (inboundState: any) => inboundState,
+    (outboundState: any, key) => {
+        if (key === 'auth' || key === 'bookings' || key === 'users') {
+            return {
+                ...outboundState,
+                isLoading: false,
+                error: null,
+            };
+        }
+        return outboundState;
+    }
+)
 
 const rootReducer = combineReducers({
     auth: authReducer,
@@ -26,6 +40,7 @@ const persistConfig = {
     version: 1,
     storage,
     whitelist: ['auth'], // Only persist auth state
+    transforms: [resetLoadingTransform], // Apply transform
 };
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
@@ -38,6 +53,7 @@ export const store = configureStore({
                 ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
             },
         }),
+        devTools: process.env.NODE_ENV !== 'production',
 });
 
 export const persistor = persistStore(store);

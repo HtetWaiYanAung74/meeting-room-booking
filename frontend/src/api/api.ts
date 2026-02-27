@@ -11,6 +11,18 @@ import type {
 } from '@/types';
 
 const API_BASE_URL = `${import.meta.env.VITE_API_URL}/api/v1`;
+const REQUEST_TIMEOUT = 15000;
+
+class ApiError extends Error {
+    constructor(
+        message: string,
+        public status?: number,
+        public code?: string
+    ) {
+        super(message);
+        this.name = 'ApiError';
+    }
+}
 
 class ApiClient {
     private userId: string | null = null;
@@ -20,27 +32,71 @@ class ApiClient {
     }
 
     private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-        const headers: HeadersInit = {
+        const headers: Record<string, string> = {
             'Content-Type': 'application/json',
-            ...options.headers,
+            Accept: 'application/json',
         };
 
         if (this.userId) {
-            (headers as Record<string, string>)['x-user-id'] = this.userId;
+            headers['x-user-id'] = this.userId;
         }
 
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        const config: RequestInit = {
             ...options,
-            headers,
-        });
+            headers: {
+                ...headers,
+                ...options.headers,
+            },
+        };
 
-        const data = await response.json();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
-        if (!response.ok) {
-            throw new Error(data.message || data.error || 'Request failed');
+        try {
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                ...config,
+                signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                if (!response.ok) {
+                    throw new ApiError(
+                        `Server error: ${response.status} ${response.statusText}`,
+                        response.status,
+                        'SERVER_ERROR'
+                    );
+                }
+                throw new ApiError('Server returned non-JSON response', response.status, 'INVALID_RESPONSE');   
+            }
+
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.message || data.error || 'Request failed');
+            }
+            return data as T;
+            
+        } catch(error) {
+            clearTimeout(timeoutId);
+            if (error instanceof Error && error.name === 'AbortError') {
+                throw new ApiError('Request timed out. Please check your internet connection.', 0, 'TIMEOUT');
+            }
+
+            if (error instanceof TypeError && error.message === 'Failed to fetch') {
+                throw new ApiError('Network error. Please check your internet connection', 0, 'NETWORK_ERROR');
+            }
+
+            if (error instanceof ApiError) {
+                throw error;
+            }
+
+            throw new ApiError(
+                error instanceof Error ? error.message : 'An unexpected error occurred',
+                0,
+                'UNKNOWN_ERROR'
+            );
         }
-
-        return data as T;
     }
 
     // Auth

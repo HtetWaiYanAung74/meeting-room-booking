@@ -1,4 +1,4 @@
-import { useState, FormEvent, useCallback } from 'react';
+import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Button, Input } from '@/components/common';
 
 interface LoginFormProps {
@@ -10,6 +10,12 @@ export function LoginForm({ onSubmit, isLoading }: LoginFormProps) {
     const [name, setName] = useState('');
     const [error, setError] = useState('');
     const [touched, setTouched] = useState(false);
+
+    useEffect(() => {
+        if (isLoading) {
+            setError('');
+        }
+    }, [isLoading]);
 
     const validateName = useCallback((value: string): string => {
         if (!value.trim()) {
@@ -64,7 +70,7 @@ export function LoginForm({ onSubmit, isLoading }: LoginFormProps) {
                 autoComplete="name"
             />
             <Button type="submit" fullWidth isLoading={isLoading} className="login-form__submit">
-                Sign In
+                {isLoading ? 'Signing in...' : 'Sign In'}
             </Button>
         </form>
     );

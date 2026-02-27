@@ -417,3 +417,34 @@
 .form-input::placeholder {
   color: var(--color-gray-400);
 }
+
+.login-loading-notice {
+  background-color: var(--color-warning-50);
+  border: 1px solid var(--color-warning-200);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  text-align: center;
+}
+
+.login-loading-notice p {
+  margin: 0;
+  color: var(--color-warning-700);
+}
+
+.login-loading-notice .btn {
+  margin-top: var(--spacing-sm);
+}
+
+@keyframes pulse-warning {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.login-loading-notice {
+  animation: pulse-warning 2s ease-in-out infinite;
+}

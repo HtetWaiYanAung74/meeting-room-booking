@@ -1,10 +1,25 @@
-import { Card, CardBody, Message } from '@/components/common';
+import { useEffect } from 'react';
+import { Button, Card, CardBody, Message } from '@/components/common';
 import { LoginForm, QuickLoginButtons } from '@/components/features/auth';
 import { useAuth, useNotifications } from '@/hooks';
 
 export function LoginPage() {
-    const { login, isLoading } = useAuth();
+    const { login, isLoading, error, resetLoading, clearError } = useAuth();
     const { notifications } = useNotifications();
+
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            if (isLoading) {
+                resetLoading();
+            }
+        }, 500);
+        return () => clearTimeout(timeout);
+    }, []);
+
+    const handleResetClick = () => {
+        resetLoading();
+        clearError();
+    };
 
     return (
         <div className="login-page-wrapper">
@@ -24,6 +39,23 @@ export function LoginPage() {
                                 {n.message}
                             </Message>
                         ))}
+
+                        {error && (
+                            <Message type='error' onDismiss={clearError}>
+                                {error}
+                            </Message>
+                        )}
+
+                        {isLoading && (
+                            <div className='login-loading-notice'>
+                                <p className='text-sm text-gray-500 mb-sm'>
+                                    Taking too long? There might be a connection issue.
+                                </p>
+                                <Button variant='ghost' size='sm' onClick={handleResetClick}>
+                                    Reset and try again
+                                </Button>
+                            </div>
+                        )}
 
                         <LoginForm onSubmit={login} isLoading={isLoading} />
 

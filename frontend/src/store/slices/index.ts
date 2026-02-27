@@ -1,4 +1,12 @@
-export { default as authReducer, loginUser, logout, clearAuthError, setAuthUser } from './authSlice';
+export { 
+    default as authReducer, 
+    clearAuthError, 
+    loginUser, 
+    logout, 
+    resetAuthLoading,
+    resetAuthState, 
+    setAuthUser, 
+} from './authSlice';
 export {
     default as bookingsReducer,
     fetchBookings,
