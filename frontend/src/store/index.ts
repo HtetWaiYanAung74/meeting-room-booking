@@ -9,6 +9,7 @@ import {
     PERSIST,
     PURGE,
     REGISTER,
+    PersistConfig,
 } from 'redux-persist';
 import storage from 'redux-persist/lib/storage';
 import { authReducer, bookingsReducer, usersReducer, notificationReducer } from './slices';
@@ -34,8 +35,10 @@ const rootReducer = combineReducers({
     notifications: notificationReducer,
 });
 
+export type RootState = ReturnType<typeof rootReducer>;
+
 // Only persist auth - bookings and users come from API
-const persistConfig = {
+const persistConfig: PersistConfig<RootState> = {
     key: 'meeting-room-app',
     version: 1,
     storage,
@@ -43,7 +46,7 @@ const persistConfig = {
     transforms: [resetLoadingTransform], // Apply transform
 };
 
-const persistedReducer = persistReducer(persistConfig, rootReducer);
+const persistedReducer = persistReducer<RootState>(persistConfig, rootReducer);
 
 export const store = configureStore({
     reducer: persistedReducer,
@@ -58,5 +61,4 @@ export const store = configureStore({
 
 export const persistor = persistStore(store);
 
-export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
