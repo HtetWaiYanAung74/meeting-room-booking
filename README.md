@@ -1,115 +1,169 @@
-# Meeting Room Booking System (TypeScript)
+# 🏢 Meeting Room Booking System
 
-A full-stack web application for managing meeting room bookings with role-based access control.
+A full-stack meeting room booking application with role-based access control, password authentication, and real-time booking conflict detection.
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Getting Started](#getting-started)
+- [Default Users](#default-users)
+- [Authentication](#authentication)
+
+---
 
 ## Features
 
-- **Full TypeScript implementation with strict type checking**
-- **Role-based access control** (Admin, Owner, User)
-- **Booking management** with overlap detection
-- **User management** (Admin only)
-- **Usage statistics and summaries** (Owner/Admin)
+### Authentication
+- Password-based login with bcrypt hashing
+- Quick login buttons that populate the username field for demo accounts
+- Persistent session via redux-persist (loading states auto-reset on app restart)
+- Request timeout handling with recovery UI for network failures
+
+### Booking Management
+- Create, view, and delete meeting room bookings
+- Automatic overlap/conflict detection
+- Date and time validation (no past bookings, minimum 5 min, maximum 24 hrs)
+- Bookings grouped by user view for owners and admins
+
+### User Management (Admin Only)
+- Create users with username, role, and password
+- Update user roles
+- Delete users (cascades to their bookings)
+
+### Role-Based Access Control
+
+| Feature              | User | Owner | Admin |
+|----------------------|------|-------|-------|
+| View all bookings    | ✅   | ✅    | ✅    |
+| Create bookings      | ✅   | ✅    | ✅    |
+| Delete own bookings  | ✅   | ✅    | ✅    |
+| Delete any booking   | ❌   | ✅    | ✅    |
+| View bookings by user| ❌   | ✅    | ✅    |
+| View booking summary | ❌   | ✅    | ✅    |
+| Manage users         | ❌   | ❌    | ✅    |
+
+### Form Validation
+- Frontend: real-time field validation on blur and submit with inline error messages
+- Backend: returns all field-level errors in a single response
+- Required field indicators and shake animation on errors
+
+---
 
 ## Tech Stack
 
-- **Backend**: Node.js, Express, Postgres (Supabase)
-- **Frontend**: React, Vite, TypeScript
-
-## Time Handling
-
-- All times stored in UTC (ISO 8601 format)
-- The frontend converts local times to UTC before sending to the API
-- **Back-to-back bookings are allowed**: If Booking A ends at 10:00 and Booking B starts at 10:00, they don't overlap
-- Minimum booking: 15 minutes
-- Maximum booking: 8 hours
-
-## Type Safety
-
-This implementation uses strict TypeScript with:
-- Explicit type definitions for all API requests/responses
-- Type-safe database queries
-- Properly typed React components with interfaces for props
-- No `any` types used
-
-## User Deletion Behavior
-
-When a user is deleted, all their bookings are automatically deleted (CASCADE delete).
-
-## API Endpoints
-
-### Authentication
-- `POST /api/v1/auth/login` - Login by name
-- `GET /api/v1/auth/me` - Get current user
-
-### Users (Admin only)
-- `GET /api/v1/users` - List all users
-- `POST /api/v1/users` - Create user
-- `PATCH /api/v1/users/:id/role` - Update user role
-- `DELETE /api/v1/users/:id` - Delete user
-
-### Bookings
-- `GET /api/v1/bookings` - List all bookings
-- `POST /api/v1/bookings` - Create booking
-- `DELETE /api/v1/bookings/:id` - Delete booking
-- `GET /api/v1/bookings/by-user` - Bookings grouped by user (Owner/Admin)
-- `GET /api/v1/bookings/summary` - Usage statistics (Owner/Admin)
-
-## Local Development
+### Frontend
+- React 18 with TypeScript
+- Redux Toolkit with redux-persist
+- Vite
+- CSS (custom design system with variables)
 
 ### Backend
+- Node.js with Express
+- TypeScript
+- PostgreSQL
+- bcryptjs for password hashing
+- UUID for unique identifiers
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- PostgreSQL 14+
+
+### 1) Clone and install
 
 ```bash
+git clone <repository-url>
+cd meeting-room-booking
+
+# Backend
 cd backend
 npm install
-npm run dev
+
+# Frontend
+cd ../frontend
+npm install
 ```
-
-Server runs on http://localhost:3001
-
-### Frontend
+### 2) Start the application
 
 ```bash
+# Terminal 1 — Backend
+cd backend
+npm run dev
+
+# Terminal 2 — Frontend
 cd frontend
-npm install
 npm run dev
 ```
 
-Frontend runs on http://localhost:3000
+The frontend runs on `https://meeting-room-booking-beryl.vercel.app/` and the backend on `https://meeting-room-booking-ocuy.onrender.com/`.
 
-## Default Users
+---## Default Users
 
-| Name  | Role  |
-|-------|-------|
-| admin | Admin |
-| owner | Owner |
-| user1 | User  |
-| user2 | User  |
+Seeded on first startup. The default password for all accounts is the value of `SEED_DEFAULT_PASSWORD` (defaults to `password123`).
 
-## Deployment
+| Username | Role  | Password      |
+|----------|-------|---------------|
+| admin    | Admin | password123   |
+| owner    | Owner | password123   |
+| user1    | User  | password123   |
+| user2    | User  | password123   |
 
-### Backend (Render)
+---
 
-1. Create a new Web Service on Render
-2. Connect your repository
-3. Set build command: `cd backend && npm install`
-4. Set start command: `cd backend && npm start`
+## Authentication
 
-### Frontend (Vercel)
+The application uses a simple header-based authentication flow.
 
-1. Import project to Vercel
-2. Set root directory to `frontend`
-3. Add environment variable: `VITE_API_URL` = your backend URL
+### Login Flow
 
-## Permissions Matrix
+1. User enters username and password (or clicks a quick login button to populate the username, then enters password).
+2. `POST /api/auth/login` validates credentials against a bcrypt hash stored in the database.
+3. On success, the server returns the user object (id, username, role).
+4. The frontend stores the user in Redux (persisted to localStorage) and attaches `x-user-id` header to all subsequent requests.
+5. The backend `authenticate` middleware reads `x-user-id` to identify the caller; `authorize` checks the role.
 
-| Action | User | Owner | Admin |
-|--------|------|-------|-------|
-| Create booking | ✅ | ✅ | ✅ |
-| View all bookings | ✅ | ✅ | ✅ |
-| Delete own booking | ✅ | ✅ | ✅ |
-| Delete any booking | ❌ | ✅ | ✅ |
-| View bookings by user | ❌ | ✅ | ✅ |
-| View usage summary | ❌ | ✅ | ✅ |
-| Create users | ❌ | ❌ | ✅ |
-| Delete users | ❌ | ❌ | ✅ |
-| Change user roles | ❌ | ❌ | ✅ |
+### Quick Login Buttons
+
+Quick login buttons populate the username field in the login form. The user must still enter the password and click **Sign In**. No login occurs without a valid password.
+
+### Session Recovery
+
+If the app gets stuck in a loading state (e.g. network failure during login), the following safeguards apply:
+
+- redux-persist transform resets `isLoading` to `false` on every rehydration
+- A "Reset and try again" button appears after a brief delay
+- A 30-second safety timeout auto-resets the loading state
+- API requests abort after 15 seconds with a clear error message
+
+---
+## Validation Rules
+
+### Username
+- Required
+- 2–50 characters
+- Letters, numbers, and underscores only
+
+### Password
+- Required
+- Minimum 6 characters
+
+### Booking Title
+- Required
+- 3–100 characters
+
+### Booking Times
+- Start time cannot be in the past
+- End time must be after start time
+- Minimum duration: 5 minutes
+- Maximum duration: 24 hours
+- No overlapping bookings allowed
+
+### User Role
+- Must be one of: `admin`, `owner`, `user`
