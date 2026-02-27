@@ -55,7 +55,7 @@ A full-stack meeting room booking application with role-based access control, pa
 ## Tech Stack
 
 ### Frontend
-- React 18 with TypeScript
+- React 19 with TypeScript
 - Redux Toolkit with redux-persist
 - Vite
 - CSS (custom design system with variables)
