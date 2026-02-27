@@ -8,9 +8,9 @@ export function UsersPage() {
     const { user } = useAuth();
     const { users, isLoading, createUser, updateUserRole, deleteUser } = useUsers();
 
-    const handleCreateUser = async (name: string, role: UserRole) => {
+    const handleCreateUser = async (name: string, password: string, role: UserRole) => {
         try {
-            await createUser(name, role);
+            await createUser(name, password, role);
         } catch {
             // Error is handled in the hook
         }

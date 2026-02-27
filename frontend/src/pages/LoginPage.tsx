@@ -1,20 +1,23 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Button, Card, CardBody, Message } from '@/components/common';
 import { LoginForm, QuickLoginButtons } from '@/components/features/auth';
 import { useAuth, useNotifications } from '@/hooks';
 
 export function LoginPage() {
-    const { login, isLoading, error, resetLoading, clearError } = useAuth();
+    const { login, isLoading, resetLoading } = useAuth();
     const { notifications } = useNotifications();
+    const setNameRef = useRef<(name: string) => void>(null);
 
     useEffect(() => {
         const timeout = setTimeout(() => {
-            if (isLoading) {
-                resetLoading();
-            }
+            if (isLoading) resetLoading();
         }, 500);
         return () => clearTimeout(timeout);
     }, []);
+
+    const handleQuickSelect = (name: string) => {
+        setNameRef.current?.(name);
+    }
 
     return (
         <div className="login-page-wrapper">
@@ -35,19 +38,13 @@ export function LoginPage() {
                             </Message>
                         ))}
 
-                        {error && (
-                            <Message type='error' onDismiss={clearError}>
-                                {error}
-                            </Message>
-                        )}
-
-                        <LoginForm onSubmit={login} isLoading={isLoading} />
+                        <LoginForm onSubmit={login} isLoading={isLoading} setNameRef={setNameRef} />
 
                         <div className="login-divider">
                             <span>or continue with demo account</span>
                         </div>
 
-                        <QuickLoginButtons onSelect={login} isLoading={isLoading} />
+                        <QuickLoginButtons onSelect={handleQuickSelect} isLoading={isLoading} />
                     </CardBody>
                 </Card>
 

@@ -84,3 +84,13 @@ export function validateRole(role: string): ValidationResult {
 export function isValidRole(role: string): role is UserRole {
     return ['admin', 'owner', 'user'].includes(role);
 }
+
+export function validatePassword(password: unknown): ValidationResult {
+    if (!password || typeof password !== 'string') {
+        return { valid: false, error: 'Password is required' };
+    }
+    if (password.length < 6) {
+        return { valid: false, error: 'Password must be at least 6 characters' };
+    }
+    return { valid: true };
+}

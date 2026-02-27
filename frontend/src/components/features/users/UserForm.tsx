@@ -4,16 +4,18 @@ import { ROLE_OPTIONS } from '@/utils/constants';
 import type { UserRole } from '@/types';
 
 interface UserFormProps {
-    onSubmit: (name: string, role: UserRole) => Promise<void>;
+    onSubmit: (name: string, password: string, role: UserRole) => Promise<void>;
 }
 
 interface FormErrors {
     name?: string;
+    password?: string;
     role?: string;
 }
 
 export function UserForm({ onSubmit }: UserFormProps) {
     const [name, setName] = useState('');
+    const [password, setPassword] = useState('');
     const [role, setRole] = useState<UserRole | ''>('');
     const [errors, setErrors] = useState<FormErrors>({});
     const [isLoading, setIsLoading] = useState(false);
@@ -36,6 +38,15 @@ export function UserForm({ onSubmit }: UserFormProps) {
                 }
                 return undefined;
 
+            case 'password':
+                if (!value) {
+                    return 'Password is required';
+                }
+                if (value.length < 6) {
+                    return 'Password must be at least 6 characters';
+                }
+                return undefined;
+
             case 'role':
                 if (!value) {
                     return 'Please select a role';
@@ -53,16 +64,17 @@ export function UserForm({ onSubmit }: UserFormProps) {
     const validateForm = useCallback((): boolean => {
         const newErrors: FormErrors = {
             name: validateField('name', name),
+            password: validateField('password', password),
             role: validateField('role', role),
         };
 
         setErrors(newErrors);
         return !Object.values(newErrors).some(Boolean);
-    }, [name, role, validateField]);
+    }, [name, password, role, validateField]);
 
     const handleBlur = (field: string) => {
         setTouched((prev) => ({ ...prev, [field]: true }));
-        const value = field === 'name' ? name : role;
+        const value = field === 'name' ? name : field === 'password' ? password : role;
         setErrors((prev) => ({ ...prev, [field]: validateField(field, value) }));
     };
 
@@ -73,6 +85,13 @@ export function UserForm({ onSubmit }: UserFormProps) {
         }
     };
 
+    const handlePasswordChange = (value: string) => {
+        setPassword(value);
+        if (touched.password) {
+            setErrors((prev) => ({ ...prev, password: validateField('password', value) }));
+        }
+    }
+
     const handleRoleChange = (value: string) => {
         setRole(value as UserRole | '');
         if (touched.role) {
@@ -82,15 +101,16 @@ export function UserForm({ onSubmit }: UserFormProps) {
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        setTouched({ name: true, role: true });
+        setTouched({ name: true, password: true, role: true });
         if (!validateForm()) {
             return;
         }
 
         setIsLoading(true);
         try {
-            await onSubmit(name.trim(), role as UserRole);
+            await onSubmit(name.trim(), password, role as UserRole);
             setName('');
+            setPassword('');
             setRole('');
             setErrors({});
             setTouched({});
@@ -102,7 +122,7 @@ export function UserForm({ onSubmit }: UserFormProps) {
     };
 
     return (
-        <form onSubmit={handleSubmit} noValidate>
+        <form onSubmit={handleSubmit} noValidate className='gap-lg p-lg'>
             <div className="form-row">
                 <Input
                     label="Name"
@@ -114,6 +134,17 @@ export function UserForm({ onSubmit }: UserFormProps) {
                     error={touched.name ? errors.name : undefined}
                     required
                     maxLength={50}
+                />
+                <Input
+                    type="password"
+                    label="Password"
+                    value={password}
+                    onChange={(e) => handlePasswordChange(e.target.value)}
+                    onBlur={() => handleBlur('password')}
+                    placeholder="Set password"
+                    disabled={isLoading}
+                    error={touched.password ? errors.password : undefined}
+                    required
                 />
                 <Select
                     label="Role"

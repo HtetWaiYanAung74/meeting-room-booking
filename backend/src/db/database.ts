@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import bcrypt from 'bcryptjs';
 import { Pool } from 'pg';
 import { v4 as uuidv4 } from 'uuid';
 import type {
@@ -8,6 +9,7 @@ import type {
     UserRole,
     BookingSummaryRow,
     OverlapCheckRow,
+    UserAuthRow,
 } from '../types/index.js';
 
 const requiredEnvVars = [
@@ -56,6 +58,7 @@ export async function initializeDatabase(): Promise<void> {
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 name VARCHAR(255) UNIQUE NOT NULL,
                 role VARCHAR(50) NOT NULL CHECK (role IN ('admin', 'owner', 'user')),
+                password_hash VARCHAR(255) NOT NULL,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             )
         `);
@@ -81,21 +84,23 @@ export async function initializeDatabase(): Promise<void> {
         // Seed default users if none exist
         const userCountResult = await client.query('SELECT COUNT(*) as count FROM users');
         const userCount = parseInt(userCountResult.rows[0].count, 10);
+        const defaultPassword = 'password123';
 
         if (userCount === 0) {
             console.log('🌱 Seeding default users...');
 
-            const seedUsers: Array<{ name: string; role: UserRole }> = [
-                { name: 'admin', role: 'admin' },
-                { name: 'owner', role: 'owner' },
-                { name: 'user1', role: 'user' },
-                { name: 'user2', role: 'user' },
+            const seedUsers: Array<{ name: string; role: UserRole, password: string }> = [
+                { name: 'admin', role: 'admin', password: defaultPassword },
+                { name: 'owner', role: 'owner', password: defaultPassword },
+                { name: 'user1', role: 'user', password: defaultPassword },
+                { name: 'user2', role: 'user', password: defaultPassword },
             ];
 
             for (const user of seedUsers) {
+                const hash = await bcrypt.hash(user.password, 10);
                 await client.query(
-                    'INSERT INTO users (id, name, role) VALUES ($1, $2, $3)',
-                    [uuidv4(), user.name, user.role]
+                    'INSERT INTO users (id, name, role, password_hash) VALUES ($1, $2, $3, $4)',
+                    [uuidv4(), user.name, user.role, hash]
                 );
                 console.log(`  ✅ Created user: ${user.name} (${user.role})`);
             }
@@ -137,6 +142,11 @@ export const userQueries = {
         return result.rows[0];
     },
 
+    getAuthByName: async (name: string, password: string): Promise<UserAuthRow | undefined> => {
+        const result = await pool.query('SELECT * FROM users WHERE LOWER(name) = LOWER($1)', [name]);
+        return result.rows[0];
+    },
+
     getByName: async (name: string): Promise<User | undefined> => {
         const result = await pool.query(
             'SELECT id, name, role, created_at FROM users WHERE LOWER(name) = LOWER($1)',
@@ -145,12 +155,12 @@ export const userQueries = {
         return result.rows[0];
     },
 
-    create: async (id: string, name: string, role: UserRole): Promise<User> => {
+    create: async (id: string, name: string, role: UserRole, passwordHash: string): Promise<User> => {
         const result = await pool.query(`
-            INSERT INTO users (id, name, role) 
-            VALUES ($1, $2, $3) 
+            INSERT INTO users (id, name, role, password_hash) 
+            VALUES ($1, $2, $3, $4) 
             RETURNING id, name, role, created_at
-        `, [id, name.toLowerCase(), role]);
+        `, [id, name.toLowerCase(), role, passwordHash]);
         return result.rows[0];
     },
 

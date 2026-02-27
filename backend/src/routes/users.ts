@@ -1,19 +1,18 @@
+import bcrypt from 'bcryptjs';
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { userQueries } from '../db/database.js';
 import { authenticate, authorize } from '../middleware/auth.js';
-import { validateRequiredFields, validateRole, isValidRole } from '../utils/validation.js';
+import { validateRequiredFields, validateRole, isValidRole, validatePassword } from '../utils/validation.js';
 import type {
     CreateUserRequestBody,
     UpdateRoleRequestBody,
     UsersResponse,
-    UserResponse,
-    ApiError,
 } from '../types/index.js';
 
 const router = Router();
 
-// GET /api/users - List all users (Admin only)
+// GET /api/v1/users - List all users (Admin only)
 router.get(
     '/',
     authenticate,
@@ -30,40 +29,43 @@ router.get(
     }
 );
 
-// POST /api/users - Create user (Admin only)
+// POST /api/v1/users - Create user (Admin only)
 router.post(
     '/',
     authenticate,
     authorize('admin'),
     async (req: Request, res: Response): Promise<void> => {
         try {
-            const { name, role } = req.body as CreateUserRequestBody;
+            const { name, role, password } = req.body as CreateUserRequestBody;
 
-            // Validate fields
-            const fieldValidation = validateRequiredFields({ name, role }, ['name', 'role']);
+            const fieldValidation = validateRequiredFields({ name, role, password }, ['name', 'role', 'password']);
             if (!fieldValidation.valid) {
                 res.status(400).json({ error: 'Validation error', message: fieldValidation.error });
                 return;
             }
 
-            // Validate role
             const roleValidation = validateRole(role);
             if (!roleValidation.valid) {
                 res.status(400).json({ error: 'Validation error', message: roleValidation.error });
                 return;
             }
 
-            // Check if name exists
+            const passwordValidation = validatePassword(password);
+            if (!passwordValidation.valid) {
+                res.status(400).json({ error: 'Validation error', message: passwordValidation.error });
+                return;
+            }
+
             const existingUser = await userQueries.getByName(name.trim());
             if (existingUser) {
                 res.status(409).json({ error: 'Conflict', message: 'Username already exists' });
                 return;
             }
 
-            // Create user
             const id = uuidv4();
+            const passwordHash = await bcrypt.hash(password, 10);
             if (isValidRole(role)) {
-                const newUser = await userQueries.create(id, name.trim(), role);
+                const newUser = await userQueries.create(id, name.trim(), role, passwordHash);
                 res.status(201).json({ message: 'User created successfully', user: newUser });
             }
         } catch (error) {
@@ -73,7 +75,7 @@ router.post(
     }
 );
 
-// PATCH /api/users/:id/role - Update user role (Admin only)
+// PATCH /api/v1/users/:id/role - Update user role (Admin only)
 router.patch(
     '/:id/role',
     authenticate,
@@ -83,14 +85,12 @@ router.patch(
             const { id } = req.params;
             const { role } = req.body as UpdateRoleRequestBody;
 
-            // Validate role
             const roleValidation = validateRole(role);
             if (!roleValidation.valid) {
                 res.status(400).json({ error: 'Validation error', message: roleValidation.error });
                 return;
             }
 
-            // Check if user exists
             const user = await userQueries.getById(id);
             if (!user) {
                 res.status(404).json({ error: 'Not found', message: 'User not found' });
@@ -103,7 +103,6 @@ router.patch(
                 return;
             }
 
-            // Update role
             if (isValidRole(role)) {
                 const updatedUser = await userQueries.updateRole(id, role);
                 res.json({ message: 'Role updated successfully', user: updatedUser });
@@ -115,7 +114,7 @@ router.patch(
     }
 );
 
-// DELETE /api/users/:id - Delete user (Admin only)
+// DELETE /api/v1/users/:id - Delete user (Admin only)
 router.delete(
     '/:id',
     authenticate,
@@ -124,7 +123,6 @@ router.delete(
         try {
             const { id } = req.params;
 
-            // Check if user exists
             const user = await userQueries.getById(id);
             if (!user) {
                 res.status(404).json({ error: 'Not found', message: 'User not found' });
@@ -137,7 +135,6 @@ router.delete(
                 return;
             }
 
-            // Delete user (bookings cascade)
             await userQueries.delete(id);
             res.json({
                 message: 'User deleted successfully',

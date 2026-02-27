@@ -28,9 +28,9 @@ export function useAuth() {
     }, [user]);
 
     const handleLogin = useCallback(
-        async (name: string) => {
+        async (name: string, password: string) => {
             try {
-                const result = await dispatch(loginUser(name));
+                const result = await dispatch(loginUser({name, password}));
                 if (loginUser.rejected.match(result)) {
                     dispatch(addNotification({ type: 'error', message: result.payload as string }));
                     throw new Error(result.payload as string);

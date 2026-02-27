@@ -16,7 +16,7 @@ import type {
 
 const router = Router();
 
-// GET /api/bookings - List all bookings
+// GET /api/v1/bookings - List all bookings
 router.get('/', authenticate, async (_req: Request, res: Response): Promise<void> => {
     try {
         const bookings = await bookingQueries.getAll();
@@ -28,7 +28,7 @@ router.get('/', authenticate, async (_req: Request, res: Response): Promise<void
     }
 });
 
-// GET /api/bookings/by-user - Bookings grouped by user (Owner/Admin)
+// GET /api/v1/bookings/by-user - Bookings grouped by user (Owner/Admin)
 router.get(
     '/by-user',
     authenticate,
@@ -72,7 +72,7 @@ router.get(
     }
 );
 
-// GET /api/bookings/summary - Usage summary (Owner/Admin)
+// GET /api/v1/bookings/summary - Usage summary (Owner/Admin)
 router.get(
     '/summary',
     authenticate,
@@ -105,7 +105,7 @@ router.get(
     }
 );
 
-// POST /api/bookings - Create booking
+// POST /api/v1/bookings - Create booking
 router.post('/', authenticate, async (req: Request, res: Response): Promise<void> => {
     try {
         if (!req.user) {
@@ -115,7 +115,6 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
 
         const { title, startTime, endTime } = req.body as CreateBookingRequestBody;
 
-        // Validate fields
         const fieldValidation = validateRequiredFields(
             { title, startTime, endTime },
             ['title', 'startTime', 'endTime']
@@ -149,7 +148,6 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
             return;
         }
 
-        // Create booking
         const id = uuidv4();
         await bookingQueries.create(id, req.user.id, title.trim(), startTime, endTime);
 
@@ -169,7 +167,7 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
     }
 });
 
-// DELETE /api/bookings/:id - Delete booking
+// DELETE /api/v1/bookings/:id - Delete booking
 router.delete('/:id', authenticate, async (req: Request, res: Response): Promise<void> => {
     try {
         if (!req.user) {
@@ -179,7 +177,6 @@ router.delete('/:id', authenticate, async (req: Request, res: Response): Promise
 
         const { id } = req.params;
 
-        // Check if booking exists
         const booking = await bookingQueries.getById(id);
         if (!booking) {
             res.status(404).json({ error: 'Not found', message: 'Booking not found' });

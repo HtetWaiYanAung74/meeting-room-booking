@@ -1,5 +1,6 @@
 import { RoleBadge } from '@/components/common';
 import type { UserStats } from '@/types';
+import { pluralize } from '@/utils';
 
 interface UserStatsListProps {
     stats: UserStats[];
@@ -16,10 +17,10 @@ export function UserStatsList({ stats }: UserStatsListProps) {
                     </div>
                     <div className="flex gap-lg text-sm text-gray-600">
                         <span>
-                            <strong>{item.stats.totalBookings}</strong> bookings
+                            <strong>{item.stats.totalBookings}</strong> {pluralize(item.stats.totalBookings, 'booking')}
                         </span>
                         <span>
-                            <strong>{item.stats.totalHours}</strong> hours
+                            <strong>{item.stats.totalHours}</strong> {pluralize(item.stats.totalHours, 'hour')}
                         </span>
                     </div>
                 </div>

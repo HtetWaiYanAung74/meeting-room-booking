@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs';
 import { Router, Request, Response } from 'express';
 import { userQueries } from '../db/database.js';
 import type { LoginRequestBody, LoginResponse, UserResponse, ApiError } from '../types/index.js';
@@ -7,20 +8,30 @@ const router = Router();
 // POST /api/auth/login
 router.post('/login', async (req: Request, res: Response): Promise<void> => {
     try {
-        const { name } = req.body as LoginRequestBody;
+        const { name, password } = req.body as LoginRequestBody;
 
-        if (!name?.trim()) {
-            const error: ApiError = { error: 'Validation error', message: 'Username is required' };
+        if (!name?.trim() && !password) {
+            const error: ApiError = { error: 'Validation error', message: 'Username and password are required' };
             res.status(400).json(error);
             return;
         }
 
-        const user = await userQueries.getByName(name.trim());
+        const user = await userQueries.getAuthByName(name.trim(), password);
 
         if (!user) {
             const error: ApiError = {
                 error: 'User not found',
                 message: `No user found with name: ${name}`,
+            };
+            res.status(404).json(error);
+            return;
+        }
+
+        const ok = await bcrypt.compare(password, user.password_hash);
+        if (!ok) {
+            const error: ApiError = {
+                error: 'Password not found',
+                message: `Invalid password`,
             };
             res.status(404).json(error);
             return;

@@ -27,9 +27,9 @@ export const fetchUsers = createAsyncThunk('users/fetchAll', async (_, { rejectW
 
 export const createUser = createAsyncThunk(
     'users/create',
-    async ({ name, role }: { name: string; role: UserRole }, { rejectWithValue }) => {
+    async ({ name, password, role }: { name: string; password: string; role: UserRole }, { rejectWithValue }) => {
         try {
-            const response = await api.createUser(name, role);
+            const response = await api.createUser(name, password, role);
             return response.user;
         } catch (error) {
             return rejectWithValue(error instanceof Error ? error.message : 'Failed to create user');

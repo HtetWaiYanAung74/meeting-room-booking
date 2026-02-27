@@ -3,17 +3,17 @@ import { RoleBadge } from '@/components/common';
 import { DEMO_USERS } from '@/utils/constants';
 
 interface QuickLoginButtonsProps {
-    onSelect: (name: string) => Promise<void>;
+    onSelect: (name: string) => void;
     isLoading: boolean;
 }
 
 export function QuickLoginButtons({ onSelect, isLoading }: QuickLoginButtonsProps) {
 
-    const handleClick = (e: MouseEvent<HTMLButtonElement>, username: string) => {
+    const handleClick = (e: MouseEvent<HTMLButtonElement>, name: string) => {
         e.preventDefault();
         e.stopPropagation();
         if (isLoading) return;
-        onSelect(username);
+        onSelect(name);
     };
 
     return (

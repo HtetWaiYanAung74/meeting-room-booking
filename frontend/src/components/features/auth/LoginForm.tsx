@@ -1,82 +1,106 @@
-import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { FormEvent, MutableRefObject, useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Input } from '@/components/common';
 
 interface LoginFormProps {
-    onSubmit: (name: string) => Promise<void>;
+    onSubmit: (name: string, password: string) => Promise<void>;
     isLoading: boolean;
+    setNameRef?: MutableRefObject<((name: string) => void) | null>;
 }
 
-export function LoginForm({ onSubmit, isLoading }: LoginFormProps) {
+interface AuthErrors {
+    name?: string;
+    password?: string;
+}
+
+export function LoginForm({ onSubmit, isLoading, setNameRef }: LoginFormProps) {
     const [name, setName] = useState('');
-    const [error, setError] = useState('');
+    const [password, setPassword] = useState('');
+    const [errors, setErrors] = useState<AuthErrors>({});
     const [hasSubmitted, setHasSubmitted] = useState(false);
-    const [hasTyped, setHasTyped] = useState(false);
-    const inputRef = useRef<HTMLInputElement>(null);
+    const passwordRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (setNameRef) {
+            setNameRef.current = (value: string) => {
+                setName(value);
+                setErrors((prev) => ({ ...prev, name: '' }));
+                setTimeout(() => passwordRef.current?.focus(), 0);
+            };
+        }
+    }, [setNameRef]);
 
     useEffect(() => {
         if (isLoading) {
-            setError('');
+            setErrors({});
             setHasSubmitted(false);
         }
     }, [isLoading]);
 
-    const validateName = useCallback((value: string): string => {
-        if (!value.trim()) {
-            return 'Username is required';
-        }
-        if (value.trim().length < 2) {
-            return 'Username must be at least 2 characters';
-        }
-        return '';
-    }, []);
+    const validate = useCallback((): { name?: string; password?: string } => {
+        const newErrors: AuthErrors = {};
+        if (!name.trim()) newErrors.name = 'Username is required';
+        if (!password) newErrors.password = 'Password is required';
+        return newErrors;
+    }, [name, password]);
 
-    const handleBlur = () => {
-        if (hasTyped && name.trim()) {
-            setError(validateName(name));
+    const handleNameChange = (value: string) => {
+        setName(value);
+        if (hasSubmitted) {
+            setErrors((prev) => ({ 
+                ...prev, 
+                name: value.trim() ? undefined : 'Username is required', 
+            }));
         }
     };
-
-    const handleChange = (value: string) => {
-        setName(value);
-        setHasTyped(true);
+    
+    const handlePasswordChange = (value: string) => {
+        setPassword(value);
         if (hasSubmitted) {
-            setError(validateName(value));
-        } else if (error && value.trim()) {
-            setError('');
+        setErrors((prev) => ({
+            ...prev,
+            password: value ? undefined : 'Password is required',
+        }));
         }
     };
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setHasSubmitted(true);
-        const validationError = validateName(name);
-        if (validationError) {
-            setError(validationError);
-            inputRef.current?.focus();
-            return;
-        }
+        const newErrors = validate();
+        setErrors(newErrors);
+        if (Object.keys(newErrors).length > 0) return;
 
         try {
-            await onSubmit(name.trim());
+            await onSubmit(name.trim(), password);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
+            setErrors({
+                password: err instanceof Error ? err.message : 'Login failed. Please try again.',
+            });
         }
     };
-
-    const showError = error && (hasSubmitted || (hasTyped && name.length > 0));
 
     return (
         <form onSubmit={handleSubmit} className="login-form" noValidate>
             <Input
                 value={name}
-                onChange={(e) => handleChange(e.target.value)}
-                onBlur={handleBlur}
+                onChange={(e) => handleNameChange(e.target.value)}
                 placeholder="Enter your name"
                 disabled={isLoading}
-                error={showError ? error : undefined}
+                error={hasSubmitted ? errors.name : undefined}
                 required
                 autoFocus
                 autoComplete="name"
+            />
+            <Input
+                ref={passwordRef}
+                type="password"
+                value={password}
+                onChange={(e) => handlePasswordChange(e.target.value)}
+                placeholder="Enter your password"
+                disabled={isLoading}
+                error={hasSubmitted ? errors.password : undefined}
+                required
+                autoComplete="current-password"
             />
             <Button type="submit" fullWidth isLoading={isLoading} className="login-form__submit">
                 {isLoading ? 'Signing in...' : 'Sign In'}

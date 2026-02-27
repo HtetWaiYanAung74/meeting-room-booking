@@ -33,6 +33,12 @@ function App() {
         }
     }, [authLoading, dispatch]);
 
+    useEffect(() => {
+        if (isAuthenticated) {
+            setActiveTab('bookings');
+        }
+    }, [isAuthenticated]);
+
     if (!isAuthenticated || !user) {
         return <LoginPage />;
     }

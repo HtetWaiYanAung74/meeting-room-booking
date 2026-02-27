@@ -16,9 +16,9 @@ const initialState: AuthState = {
 
 export const loginUser = createAsyncThunk(
     'auth/login',
-    async (name: string, { rejectWithValue }) => {
+    async ({name, password}: {name: string, password: string}, { rejectWithValue }) => {
         try {
-            const response = await api.login(name);
+            const response = await api.login(name, password);
             const user = response.user as User;
             api.setUserId(user.id);
             return user;

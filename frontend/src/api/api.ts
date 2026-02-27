@@ -100,10 +100,10 @@ class ApiClient {
     }
 
     // Auth
-    async login(name: string): Promise<LoginResponse> {
+    async login(name: string, password: string): Promise<LoginResponse> {
         return this.request<LoginResponse>('/auth/login', {
             method: 'POST',
-            body: JSON.stringify({ name }),
+            body: JSON.stringify({ name, password }),
         });
     }
 
@@ -112,10 +112,10 @@ class ApiClient {
         return this.request<UsersResponse>('/users');
     }
 
-    async createUser(name: string, role: UserRole): Promise<UserResponse> {
+    async createUser(name: string, password: string, role: UserRole): Promise<UserResponse> {
         return this.request<UserResponse>('/users', {
             method: 'POST',
-            body: JSON.stringify({ name, role }),
+            body: JSON.stringify({ name, password, role }),
         });
     }
 

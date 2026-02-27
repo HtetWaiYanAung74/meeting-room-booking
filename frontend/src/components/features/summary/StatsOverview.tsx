@@ -8,7 +8,7 @@ export function StatsOverview({ totals }: StatsOverviewProps) {
     const stats = [
         { label: 'Total Users', value: totals.totalUsers },
         { label: 'Total Bookings', value: totals.totalBookings },
-        { label: 'Total Hours Booked', value: Math.round(totals.totalMinutes / 60) },
+        { label: 'Total Hours Booked', value: Math.round(((totals.totalMinutes || 0) / 60) * 100) / 100 },
     ];
 
     return (

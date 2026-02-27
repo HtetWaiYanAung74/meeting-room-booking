@@ -30,8 +30,8 @@ export function useUsers() {
     }, [dispatch]);
 
     const handleCreateUser = useCallback(
-        async (name: string, role: UserRole) => {
-            const result = await dispatch(createUserAction({ name, role }));
+        async (name: string, password: string, role: UserRole) => {
+            const result = await dispatch(createUserAction({ name, password, role }));
             if (createUserAction.fulfilled.match(result)) {
                 dispatch(addNotification({ type: 'success', message: 'User created successfully!' }));
                 return result.payload;

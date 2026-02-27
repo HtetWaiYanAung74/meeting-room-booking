@@ -31,10 +31,12 @@ export interface AuthenticatedRequest extends Request {
 // API request bodies
 export interface LoginRequestBody {
     name: string;
+    password: string;
 }
 
 export interface CreateUserRequestBody {
     name: string;
+    password: string;
     role: UserRole;
 }
 
@@ -46,6 +48,10 @@ export interface CreateBookingRequestBody {
     title: string;
     startTime: string;
     endTime: string;
+}
+
+export interface UserAuthRow extends User {
+  password_hash: string;
 }
 
 // API response types
